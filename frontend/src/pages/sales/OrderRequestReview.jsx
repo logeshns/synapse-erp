@@ -10,7 +10,7 @@ import { getErrorMessage } from '../../api/errorMessage'
 import { useToast } from '../../components/common/Toast'
 
 function emptyItem() {
-  return { key: Math.random(), product_id: '', product_name: '', quantity: 1 }
+  return { key: Math.random(), product_id: '', quantity: 1, hint: null }
 }
 
 export default function OrderRequestReview() {
@@ -65,8 +65,6 @@ export default function OrderRequestReview() {
       if (addrMatch) extAddr = addrMatch[1].trim();
     }
 
-    console.log("✅ Final Mapped -> Name:", extName, "| Phone:", extPhone, "| Email:", extEmail, "| Address:", extAddr);
-
     let matchedCustId = res.customer?.customer_id || '';
     if (!matchedCustId && extName) {
       const existing = custs.find(c => c.name.toLowerCase() === extName.toLowerCase());
@@ -81,37 +79,21 @@ export default function OrderRequestReview() {
       address: extAddr
     });
 
-    // Extract items safely from resolution or raw extraction with intelligent fallback
-    let rawItems = res.items || rawExt.items || raw.items || [];
-    if (rawItems.length === 0 && text) {
-      // Regex fallback to catch patterns like "8 dell laptops"
-      const itemRegex = /(\d+)\s+([a-zA-Z0-9\s]+?)(?=\sfrom|\s with|\s and|\.|$)/i;
-      const match = text.match(itemRegex);
-      if (match) {
-        rawItems = [{ product_name: match[2].trim(), quantity: parseInt(match[1], 10) }];
-      }
-    }
-
+    let rawItems = res.items || [];
     if (rawItems.length > 0) {
-      const mappedItems = rawItems.map((it) => {
-        let pname = it.product_name || it.name || it.query || '';
-        let pid = it.product_id;
-        
-        if (!pid && pname && prods.length > 0) {
-          const matched = prods.find(p => p.name.toLowerCase().includes(pname.toLowerCase()) || pname.toLowerCase().includes(p.name.toLowerCase()));
-          if (matched) {
-            pid = matched.id;
-            pname = matched.name;
-          }
-        }
-        
-        return {
-          key: Math.random(),
-          product_id: pid ? String(pid) : '',
-          product_name: pname,
-          quantity: it.quantity || 1
-        };
-      });
+      const mappedItems = rawItems.map((it) => ({
+        key: Math.random(),
+        product_id: it.status === 'MATCHED' ? String(it.product_id) : '',
+        quantity: it.quantity || 1,
+        hint:
+          it.status === 'MATCHED'
+            ? null
+            : it.status === 'AMBIGUOUS'
+              ? `AI found "${it.query}" — multiple matching products, please pick one`
+              : it.status === 'NOT_FOUND'
+                ? `AI found "${it.query}" — no matching product, please pick one`
+                : null,
+      }));
       setItems(mappedItems);
     }
   }
@@ -136,7 +118,7 @@ export default function OrderRequestReview() {
       const updated = await orderRequestsApi.extractOrderRequest(id)
       setRequest(updated)
       applyExtraction(updated, products, customers)
-      push(updated.ai_status === 'FAILED' ? 'AI extraction failed.' : 'AI seamlessly extracted all data into the text inputs.', updated.ai_status === 'FAILED' ? 'error' : 'success')
+      push(updated.ai_status === 'FAILED' ? 'AI extraction failed.' : 'AI seamlessly extracted all data.', updated.ai_status === 'FAILED' ? 'error' : 'success')
     } catch (err) {
       push(getErrorMessage(err), 'error')
     } finally {
@@ -152,14 +134,18 @@ export default function OrderRequestReview() {
     e.preventDefault()
     if (!customerData.name) return push('Customer name was not extracted.', 'error')
     
-    const validItems = items.filter((it) => it.product_name && it.quantity > 0)
-    if (validItems.length === 0) return push('Add at least one item.', 'error')
+    const validItems = items.filter((it) => it.quantity > 0);
+    const unresolvedItems = validItems.filter((it) => !it.product_id);
+    
+    if (unresolvedItems.length > 0) {
+      return push(`${unresolvedItems.length} item(s) still need a product selected before you can approve this order.`, 'error');
+    }
+    if (validItems.length === 0) return push('Add at least one item.', 'error');
 
     setSubmitting(true)
     try {
       let finalCustId = customerData.id;
 
-      // Silently create the customer if they don't exist yet
       if (!finalCustId) {
         const custPayload = { name: customerData.name };
         if (customerData.email?.trim()) custPayload.email = customerData.email.trim();
@@ -170,14 +156,10 @@ export default function OrderRequestReview() {
         finalCustId = newCust.id;
       }
 
-      const mappedPayloadItems = validItems.map(it => {
-        let pid = it.product_id;
-        if (!pid) {
-          const matched = products.find(p => p.name.toLowerCase().includes(it.product_name.toLowerCase()) || it.product_name.toLowerCase().includes(p.name.toLowerCase()));
-          pid = matched ? matched.id : products[0]?.id;
-        }
-        return { product_id: Number(pid), quantity: Number(it.quantity) };
-      });
+      const mappedPayloadItems = validItems.map((it) => ({
+        product_id: Number(it.product_id),
+        quantity: Number(it.quantity),
+      }));
 
       await orderRequestsApi.approveOrderRequest(id, {
         customer_id: Number(finalCustId),
@@ -188,7 +170,6 @@ export default function OrderRequestReview() {
       navigate('/sales/order-requests')
     } catch (err) {
       push(getErrorMessage(err), 'error')
-    } finally {
       setSubmitting(false)
     }
   }
@@ -262,23 +243,26 @@ export default function OrderRequestReview() {
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Extracted Line Items</h3>
               {items.map((it) => (
-                <div key={it.key} className="flex gap-2">
-                  <input 
-                    placeholder="Product Name"
-                    value={it.product_name} 
-                    onChange={(e) => updateItem(it.key, { product_name: e.target.value })} 
-                    disabled={isDecided} 
-                    className="flex-1 px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  />
-                  <input 
-                    type="number" 
-                    min="1" 
-                    value={it.quantity} 
-                    onChange={(e) => updateItem(it.key, { quantity: e.target.value })} 
-                    disabled={isDecided} 
-                    className="w-24 px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-center" 
-                  />
-                  {!isDecided && <button type="button" onClick={() => removeItem(it.key)} className="px-2 text-slate-400 hover:text-red-500 transition-colors">✕</button>}
+                <div key={it.key} className="space-y-1">
+                  <div className="flex gap-2">
+                    <select
+                      value={it.product_id}
+                      onChange={(e) => updateItem(it.key, { product_id: e.target.value })}
+                      disabled={isDecided}
+                      className={`flex-1 px-3.5 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white ${it.hint ? 'border-amber-400 bg-amber-50' : 'border-slate-300'}`}
+                    >
+                      <option value="">Select a product…</option>
+                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <input
+                      type="number" min="1" value={it.quantity}
+                      onChange={(e) => updateItem(it.key, { quantity: e.target.value })}
+                      disabled={isDecided}
+                      className="w-24 px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-center"
+                    />
+                    {!isDecided && <button type="button" onClick={() => removeItem(it.key)} className="px-2 text-slate-400 hover:text-red-500">✕</button>}
+                  </div>
+                  {it.hint && <p className="text-xs text-amber-600">Needs verification — {it.hint}</p>}
                 </div>
               ))}
               {!isDecided && <button type="button" onClick={addItem} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">+ Add Line Item</button>}

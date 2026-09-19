@@ -19,4 +19,4 @@ class ProductRepository:
         return self.db.query(Product).filter(Product.sku == sku).first()
 
     def list_active(self) -> list[Product]:
-        return self.db.query(Product).filter(Product.is_active.is_(True)).order_by(Product.name).all()
+        return self.db.query(Product).filter(Product.is_active.is_(True)).order_by(Product.id).all()
