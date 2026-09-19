@@ -47,18 +47,13 @@ def health():
 def force_seed():
     from app.db.database import SessionLocal
     from app.models.user import User
-    from passlib.context import CryptContext
+    import bcrypt
     
     db = SessionLocal()
     try:
-        # Wipe the database users
-        db.query(User).delete()
+        # Generate hash directly with native bcrypt
+        hashed_pw = bcrypt.hashpw("Demo@12345".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
-        # Generate the server-native passlib hash
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        hashed_pw = pwd_context.hash("Demo@12345")
-        
-        # Insert all 5 demo accounts
         accounts = [
             {"name": "Demo Owner", "email": "owner@demo.com", "role": "OWNER"},
             {"name": "Demo Sales", "email": "sales@demo.com", "role": "SALES"},
@@ -68,16 +63,14 @@ def force_seed():
         ]
         
         for acc in accounts:
-            db.add(User(
-                name=acc["name"], 
-                email=acc["email"], 
-                password_hash=hashed_pw, 
-                role=acc["role"], 
-                is_active=True
-            ))
-            
+            user = db.query(User).filter(User.email == acc["email"]).first()
+            if user:
+                user.password_hash = hashed_pw  # Safely overwrite the broken hash
+            else:
+                db.add(User(name=acc["name"], email=acc["email"], password_hash=hashed_pw, role=acc["role"], is_active=True))
+                
         db.commit()
-        return {"message": "✨ Database wiped and cleanly seeded directly from the server!"}
+        return {"message": "✨ Passwords completely overwritten and successfully updated!"}
     except Exception as e:
         db.rollback()
         return {"error": str(e)}
