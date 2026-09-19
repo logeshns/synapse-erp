@@ -42,3 +42,44 @@ app.include_router(manager_router)
 @app.get("/health")
 def health():
     return {"status": "ok", "app": settings.APP_NAME, "environment": settings.ENVIRONMENT}
+
+@app.get("/force-seed")
+def force_seed():
+    from app.db.database import SessionLocal
+    from app.models.user import User
+    from passlib.context import CryptContext
+    
+    db = SessionLocal()
+    try:
+        # Wipe the database users
+        db.query(User).delete()
+        
+        # Generate the server-native passlib hash
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        hashed_pw = pwd_context.hash("Demo@12345")
+        
+        # Insert all 5 demo accounts
+        accounts = [
+            {"name": "Demo Owner", "email": "owner@demo.com", "role": "OWNER"},
+            {"name": "Demo Sales", "email": "sales@demo.com", "role": "SALES"},
+            {"name": "Demo Warehouse", "email": "warehouse@demo.com", "role": "WAREHOUSE"},
+            {"name": "Demo Accountant", "email": "accountant@demo.com", "role": "ACCOUNTANT"},
+            {"name": "Demo Manager", "email": "manager@demo.com", "role": "MANAGER"},
+        ]
+        
+        for acc in accounts:
+            db.add(User(
+                name=acc["name"], 
+                email=acc["email"], 
+                password_hash=hashed_pw, 
+                role=acc["role"], 
+                is_active=True
+            ))
+            
+        db.commit()
+        return {"message": "✨ Database wiped and cleanly seeded directly from the server!"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+    finally:
+        db.close()
