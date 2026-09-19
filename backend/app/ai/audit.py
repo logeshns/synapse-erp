@@ -10,11 +10,13 @@ def log_ai_action(
     structured_output: dict | None, status: str, error: str | None, latency_ms: int,
     tool_calls: dict | None = None,
 ) -> None:
+    safe_error = (error[:990] + "...") if error and len(error) > 990 else error
+    
     AIActionLogRepository(db).create(
         AIActionLog(
             user_id=user_id, agent_name=agent_name, model_name=model_name,
             request_text=(request_text or "")[:2000], tool_calls=tool_calls,
-            structured_output=structured_output, status=status, error=error,
+            structured_output=structured_output, status=status, error=safe_error,
             latency_ms=latency_ms, request_id=request_id_ctx_var.get(),
         )
     )
