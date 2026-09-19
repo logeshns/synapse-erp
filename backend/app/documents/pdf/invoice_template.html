@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a2e; font-size: 12px; }
+  .company-name { font-size: 20px; font-weight: bold; }
+  .invoice-title { font-size: 24px; font-weight: bold; text-align: right; }
+  .meta-table, .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .meta-table td { padding: 4px 0; }
+  .items-table th { background: #1a1a2e; color: white; padding: 8px; text-align: left; font-size: 11px; }
+  .items-table td { padding: 8px; border-bottom: 1px solid #ddd; }
+  .totals td { padding: 4px 8px; text-align: right; }
+  .totals .grand-total td { font-weight: bold; font-size: 14px; border-top: 2px solid #1a1a2e; }
+</style>
+</head>
+<body>
+  <table style="width: 100%; border-bottom: 2px solid #1a1a2e; margin-bottom: 20px;">
+    <tr>
+      <td style="width: 60%;"><div class="company-name">{{ company.name }}</div><div>{{ company.address }}</div><div>GSTIN: {{ company.gstin }}</div></td>
+      <td style="width: 40%; text-align: right; vertical-align: top;"><div class="invoice-title">INVOICE</div></td>
+    </tr>
+  </table>
+  <table class="meta-table">
+    <tr><td><strong>Invoice #</strong></td><td>{{ invoice.invoice_number }}</td><td><strong>Order #</strong></td><td>{{ order.order_number }}</td></tr>
+    <tr><td><strong>Invoice Date</strong></td><td>{{ invoice.created_at.strftime('%d %b %Y') }}</td><td><strong>Due Date</strong></td><td>{{ invoice.due_date.strftime('%d %b %Y') }}</td></tr>
+    <tr><td><strong>Bill To</strong></td><td colspan="3">{{ customer.name }}{% if customer.address %} — {{ customer.address }}{% endif %}</td></tr>
+    <tr><td><strong>Status</strong></td><td colspan="3"><strong>{{ invoice.status }}</strong></td></tr>
+  </table>
+  <table class="items-table">
+    <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Discount</th><th>Tax</th><th>Line Total</th></tr></thead>
+    <tbody>
+      {% for item in order.items %}
+      <tr>
+        <td>{{ item.product.name }}</td><td>{{ item.quantity }}</td>
+        <td>Rs.{{ "%.2f"|format(item.unit_price_snapshot) }}</td><td>Rs.{{ "%.2f"|format(item.discount) }}</td>
+        <td>{{ (item.tax_rate_snapshot * 100)|round(1) }}%</td><td>Rs.{{ "%.2f"|format(item.line_total) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <table style="width: 100%;">
+    <tr>
+      <td style="width: 60%;"></td>
+      <td style="width: 40%;">
+        <table class="totals" style="width: 100%;">
+          <tr><td>Subtotal</td><td>Rs.{{ "%.2f"|format(invoice.subtotal) }}</td></tr>
+          <tr><td>Tax</td><td>Rs.{{ "%.2f"|format(invoice.tax_total) }}</td></tr>
+          <tr><td>Discount</td><td>-Rs.{{ "%.2f"|format(invoice.discount_total) }}</td></tr>
+          <tr class="grand-total"><td>Total</td><td>Rs.{{ "%.2f"|format(invoice.total) }}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
