@@ -16,3 +16,4 @@ weasyprint==63.1
 stripe==11.4.1
 pytest==8.3.4
 httpx==0.28.1
+google-genai>=0.1.1
