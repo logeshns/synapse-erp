@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from passlib.context import CryptContext
 
 from app.api.routes.ai import router as ai_router
 from app.api.routes.analytics import router as analytics_router
@@ -18,10 +17,6 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.middleware.error_handler import register_exception_handlers
 from app.middleware.request_id import RequestIdMiddleware
-
-# Imports for auto-creating tables and seeding demo user
-from app.db.database import Base, engine, SessionLocal
-from app.models.user import User
 
 configure_logging()
 app = FastAPI(title=settings.APP_NAME)
@@ -43,31 +38,6 @@ app.include_router(ai_router)
 app.include_router(analytics_router)
 app.include_router(manager_router)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-@app.on_event("startup")
-def startup_event():
-    # Automatically create tables on startup (no Alembic needed)
-    Base.metadata.create_all(bind=engine)
-    
-    # Auto-seed the demo owner account if it doesn't exist
-    db = SessionLocal()
-    try:
-        owner = db.query(User).filter(User.email == "owner@demo.com").first()
-        if not owner:
-            hashed_password = pwd_context.hash("Demo@12345")
-            demo_user = User(
-                name="Demo Owner",
-                email="owner@demo.com",
-                password_hash=hashed_password,
-                role="OWNER",
-                is_active=True
-            )
-            db.add(demo_user)
-            db.commit()
-            print("🚀 Demo user 'owner@demo.com' automatically seeded!")
-    finally:
-        db.close()
 
 @app.get("/health")
 def health():
