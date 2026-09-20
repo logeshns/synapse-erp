@@ -13,7 +13,7 @@ class ReceiptService:
         self.repo = PaymentReceiptRepository(db)
         self.payment_repo = PaymentRepository(db)
 
-    def generate(self, payment_id: int) -> PaymentReceipt:
+    def generate(self, payment_id: int, user_id: int) -> PaymentReceipt:
         payment = self.payment_repo.get_by_id(payment_id)
         if not payment:
             raise NotFoundException(f"Payment {payment_id} not found.")
@@ -24,7 +24,11 @@ class ReceiptService:
         if existing:
             return existing
 
-        receipt = PaymentReceipt(payment_id=payment.id, receipt_number=generate_number("RCPT", self.repo.count()))
+        receipt = PaymentReceipt(
+            payment_id=payment.id, 
+            receipt_number=generate_number("RCPT", self.repo.count()),
+            generated_by_user_id=user_id
+        )
         self.repo.create(receipt)
         self.db.commit()
         self.db.refresh(receipt)

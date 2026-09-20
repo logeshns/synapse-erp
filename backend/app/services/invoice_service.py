@@ -18,7 +18,7 @@ class InvoiceService:
         self.repo = InvoiceRepository(db)
         self.order_repo = OrderRepository(db)
 
-    def generate(self, order_id: int) -> Invoice:
+    def generate(self, order_id: int, user_id: int) -> Invoice:
         order = self.order_repo.get_by_id(order_id)
         if not order:
             raise NotFoundException(f"Order {order_id} not found.")
@@ -32,6 +32,7 @@ class InvoiceService:
 
         invoice = Invoice(
             invoice_number=generate_number("INV", self.repo.count()), order_id=order.id,
+            created_by_user_id=user_id,
             subtotal=order.subtotal, tax_total=order.tax_total, discount_total=order.discount_total,
             total=order.total, due_date=date.today() + timedelta(days=DUE_IN_DAYS), status=InvoiceStatus.UNPAID.value,
         )

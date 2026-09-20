@@ -6,7 +6,7 @@ from app.core.permissions import require_roles
 from app.db.session import get_db
 from app.documents.pdf.renderer import render_invoice_pdf
 from app.models.customer import Customer
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.invoice import InvoiceOut
 from app.services.invoice_service import InvoiceService
 
@@ -17,8 +17,8 @@ GENERATORS = (UserRole.ACCOUNTANT, UserRole.WAREHOUSE, UserRole.OWNER)
 
 
 @router.post("/generate/{order_id}", response_model=InvoiceOut, status_code=201)
-def generate_invoice(order_id: int, db: Session = Depends(get_db), _=Depends(require_roles(*GENERATORS))):
-    return InvoiceService(db).generate(order_id)
+def generate_invoice(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(*GENERATORS))):
+    return InvoiceService(db).generate(order_id, user_id=current_user.id)
 
 
 @router.get("", response_model=list[InvoiceOut])
